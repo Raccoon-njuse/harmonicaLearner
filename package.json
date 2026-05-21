@@ -1,0 +1,10 @@
+{
+  "name": "harmonica-practice",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start-server.mjs",
+    "dev": "npm start"
+  }
+}

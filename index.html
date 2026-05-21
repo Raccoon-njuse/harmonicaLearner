@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>口琴练习系统</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f5f5f5;
+    color: #333;
+    padding: 16px;
+    min-height: 100vh;
+  }
+
+  /* ── Controls ── */
+  .controls {
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .controls .file-area {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .controls label { cursor: pointer; user-select: none; }
+  .controls input[type="file"] { font-size: 14px; }
+  .controls .mode-group,
+  .controls .layout-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .controls .mode-group label,
+  .controls .layout-group label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 14px;
+  }
+  .controls .layout-group input[type="number"] {
+    width: 48px;
+    text-align: center;
+    font-size: 14px;
+    padding: 2px 4px;
+  }
+  .controls .file-name {
+    font-size: 14px;
+    color: #666;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Grid container ── */
+  #grid-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    align-items: flex-start;
+  }
+
+  /* ── Sentence block ── */
+  .sentence {
+    flex: 0 0 auto;
+    border: 2px solid #999;
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 4px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .sentence .lyrics {
+    font-size: 13px;
+    color: #555;
+    padding: 4px 8px;
+    background: #fafafa;
+    border-bottom: 1px solid #e0e0e0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+    padding: 6px 12px;
+    background: #fff;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .legend .blow::before { content: ""; display: inline-block; width: 14px; height: 14px; background: #2e7d32; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+  .legend .draw::before { content: ""; display: inline-block; width: 14px; height: 14px; background: #c62828; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+  .legend .rest::before { content: ""; display: inline-block; width: 14px; height: 14px; background: #999; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+  .legend span { margin-right: 8px; }
+
+  /* ── Column header (hole labels) ── */
+  .col-header {
+    display: flex;
+    border-bottom: 1px solid #ccc;
+  }
+  .col-header .cell {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: #888;
+    border-right: 1px solid #ddd;
+    background: #fff;
+    position: relative;
+  }
+  .col-header .cell:last-child { border-right: none; }
+  .col-header .cell .octave-mark {
+    font-size: 8px;
+    color: #aaa;
+    margin-left: 1px;
+  }
+
+  /* ── Note row ── */
+  .note-row {
+    display: flex;
+    border-bottom: 1px solid #eee;
+  }
+  .note-row:last-child { border-bottom: none; }
+
+  .note-row .cell {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    border-right: 1px solid #eee;
+    color: #ccc;
+    background: #fff;
+    transition: background 0.1s, color 0.1s;
+    position: relative;
+  }
+  .note-row .cell:last-child { border-right: none; }
+
+  /* ── Active cell states ── */
+  .note-row .cell.blow {
+    background: #2e7d32;
+    color: #fff;
+  }
+  .note-row .cell.draw {
+    background: #c62828;
+    color: #fff;
+  }
+
+  /* ── Sharp indicator ── */
+  .note-row .cell .sharp {
+    position: absolute;
+    top: 1px;
+    right: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    color: inherit;
+    opacity: 0.85;
+  }
+
+  /* ── Rest row ── */
+  .note-row.rest .cell {
+    color: #bbb;
+    background: #f9f9f9;
+  }
+  .note-row.rest .cell:first-child {
+    color: #999;
+    font-size: 18px;
+  }
+
+  /* ── Sentence separator (already handled by sentence border) ── */
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+    font-size: 16px;
+    width: 100%;
+  }
+  .empty-state p { margin-top: 8px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .controls { flex-direction: column; align-items: flex-start; }
+    .note-row .cell, .col-header .cell { width: 32px; }
+    .note-row .cell { height: 30px; font-size: 13px; }
+    .col-header .cell { height: 20px; font-size: 9px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div class="file-area">
+    <input type="file" id="fileInput" accept=".txt">
+    <span class="file-name" id="fileName">未选择文件</span>
+  </div>
+  <div class="mode-group">
+    <span style="font-size:14px;color:#666;">模式：</span>
+    <label><input type="radio" name="gridMode" value="12" checked> 12 格</label>
+    <label><input type="radio" name="gridMode" value="20"> 20 格</label>
+  </div>
+  <div class="layout-group">
+    <span style="font-size:14px;color:#666;">栏数：</span>
+    <input type="number" id="columnsInput" value="1" min="1" max="10">
+  </div>
+</div>
+
+<div id="app">
+  <div id="legend" class="legend" style="display:none;">
+    <span class="blow">吹气 (1,3,5)</span>
+    <span class="draw">吸气 (2,4,6,7)</span>
+    <span class="rest">休止 (0)</span>
+  </div>
+  <div id="grid-container"></div>
+</div>
+
+<script>
+(function () {
+  // ============================================================
+  //  1. HOLE LAYOUTS
+  // ============================================================
+
+  // Each hole = { blow: noteStr, draw: noteStr }
+  // Pattern per 4-hole group: blow=[1,3,5,1'] draw=[2,4,6,7]
+
+  function octaveMarkUp(mark) {
+    if (mark === '--') return '-';
+    if (mark === '-') return '';
+    if (mark === '') return '+';
+    if (mark === '+') return '++';
+    if (mark === '++') return '+++';
+    return mark;
+  }
+
+  function buildLayout(marks) {
+    const holes = [];
+    for (const m of marks) {
+      const group = [
+        { blow: `1${m}`, draw: `2${m}` },
+        { blow: `3${m}`, draw: `4${m}` },
+        { blow: `5${m}`, draw: `6${m}` },
+        { blow: `1${octaveMarkUp(m)}`, draw: `7${m}` },
+      ];
+      holes.push(...group);
+    }
+    return holes;
+  }
+
+  // 12-grid: covers 【1-…1】【1…1+】【1+…1++】
+  const LAYOUT_12 = buildLayout(['-', '', '+']);
+
+  // 20-grid: covers 【1--…1-】【1-…1】【1…1+】【1+…1++】【1++…1+++】
+  const LAYOUT_20 = buildLayout(['--', '-', '', '+', '++']);
+
+  // ============================================================
+  //  2. NOTE PARSING
+  // ============================================================
+
+  // Pattern: optional #, then digit (1-7 or 0), then optional octave marks
+  const NOTE_RE = /^(#)?([1-7]|0)(--|\+\+|[-+])?$/;
+
+  function parseNote(token) {
+    const m = token.match(NOTE_RE);
+    if (!m) return null;
+    const sharp = m[1] === '#';
+    const digit = parseInt(m[2], 10);
+    if (digit === 0) return { sharp: false, digit: 0, octave: 0, isRest: true };
+    const octStr = m[3] || '';
+    let octave = 0;
+    // Count - and + marks
+    for (const ch of octStr) {
+      if (ch === '-') octave--;
+      if (ch === '+') octave++;
+    }
+    return { sharp, digit, octave, isRest: false };
+  }
+
+  // ============================================================
+  //  3. NOTE-TO-HOLE MAPPING  (direct computation)
+  // ============================================================
+
+  // Compute hole position from note digit and octave offset.
+  // Layout pattern: 4 holes per octave group.
+  //   hole 0: blow 1(X), draw 2(X+1)
+  //   hole 1: blow 3(X+2), draw 4(X+3)
+  //   hole 2: blow 5(X+4), draw 6(X+5)
+  //   hole 3: blow 1'(octave-up), draw 7(X+6)
+  //
+  // 12-grid = 3 groups, baseOctave -1 → holes cover O∈{-1,0,1}
+  // 20-grid = 5 groups, baseOctave -2 → holes cover O∈{-2,-1,0,1,2}
+
+  function locateNote(note, layout) {
+    if (note.isRest) return { rest: true };
+
+    const { digit, octave, sharp } = note;
+    const numCells = layout.length;
+
+    // Determine base octave from layout size
+    const baseOctave = numCells === 12 ? -1 : -2;
+    const groupIndex = octave - baseOctave;
+    if (groupIndex < 0 || groupIndex >= numCells / 4) return null; // out of range
+
+    // Position within 4-hole group: X=1→0, 2→0, 3→1, 4→1, 5→2, 6→2, 7→3
+    const holeWithinGroup = Math.min(Math.floor((digit - 1) / 2), 3);
+    const holeIndex = groupIndex * 4 + holeWithinGroup;
+    if (holeIndex < 0 || holeIndex >= numCells) return null; // should not happen
+
+    // Blow notes: 1, 3, 5;  Draw notes: 2, 4, 6, 7
+    const isBlow = digit === 1 || digit === 3 || digit === 5;
+
+    return { hole: holeIndex, isBlow, isSharp: sharp, digit, rest: false };
+  }
+
+  // ============================================================
+  //  4. PARSING FILE CONTENT
+  // ============================================================
+
+  function parseFile(text) {
+    const sentences = [];
+    const lines = text.split('\n');
+    for (const rawLine of lines) {
+      const trimmed = rawLine.trim();
+      if (!trimmed) continue;
+
+      // Split off // comment (lyrics)
+      let notePart, lyricPart;
+      const commentIdx = trimmed.indexOf('//');
+      if (commentIdx >= 0) {
+        notePart = trimmed.substring(0, commentIdx).trim();
+        lyricPart = trimmed.substring(commentIdx + 2).trim();
+      } else {
+        notePart = trimmed;
+        lyricPart = '';
+      }
+
+      if (!notePart) continue;
+
+      // Tokenize by whitespace
+      const tokens = notePart.split(/\s+/).filter(t => t.length > 0);
+      if (tokens.length === 0) continue;
+
+      const notes = [];
+      let valid = true;
+      for (const tok of tokens) {
+        const parsed = parseNote(tok);
+        if (!parsed) {
+          valid = false;
+          break;
+        }
+        notes.push(parsed);
+      }
+      if (!valid) continue;
+
+      sentences.push({ notes, lyric: lyricPart });
+    }
+    return sentences;
+  }
+
+  // ============================================================
+  //  5. RENDERING
+  // ============================================================
+
+  let currentLayout = LAYOUT_12;
+  let currentSentences = [];
+  let columns = 1;
+
+  function render() {
+    const container = document.getElementById('grid-container');
+    const legend = document.getElementById('legend');
+
+    if (currentSentences.length === 0) {
+      legend.style.display = 'none';
+      container.innerHTML = '<div class="empty-state">请选择一个简谱文件（.txt）<p>格式说明见 MUSIC.md</p></div>';
+      return;
+    }
+
+    legend.style.display = 'flex';
+    container.innerHTML = '';
+
+    const numCells = currentLayout.length;
+
+    // Build a column reference header once
+    const headerRow = document.createElement('div');
+    headerRow.className = 'col-header';
+    for (let i = 0; i < numCells; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const h = currentLayout[i];
+      // Show blow note as label
+      const blowLabel = h.blow;
+      cell.textContent = blowLabel;
+      headerRow.appendChild(cell);
+    }
+
+    // Render each sentence as a block
+    const colCount = columns;
+
+    for (let si = 0; si < currentSentences.length; si++) {
+      const sent = currentSentences[si];
+      const block = document.createElement('div');
+      block.className = 'sentence';
+
+      // Lyrics
+      if (sent.lyric) {
+        const lyrDiv = document.createElement('div');
+        lyrDiv.className = 'lyrics';
+        lyrDiv.textContent = sent.lyric;
+        block.appendChild(lyrDiv);
+      }
+
+      // Column header for this sentence
+      block.appendChild(headerRow.cloneNode(true));
+
+      // Note rows
+      for (const note of sent.notes) {
+        const row = document.createElement('div');
+        row.className = 'note-row';
+
+        if (note.isRest) {
+          row.classList.add('rest');
+          for (let i = 0; i < numCells; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            if (i === 0) cell.textContent = '—';
+            row.appendChild(cell);
+          }
+        } else {
+          const located = locateNote(note, currentLayout);
+          if (!located) {
+            // Note out of range — show blank row
+            for (let i = 0; i < numCells; i++) {
+              const cell = document.createElement('div');
+              cell.className = 'cell';
+              row.appendChild(cell);
+            }
+          } else {
+            for (let i = 0; i < numCells; i++) {
+              const cell = document.createElement('div');
+              cell.className = 'cell';
+              if (i === located.hole) {
+                cell.classList.add(located.isBlow ? 'blow' : 'draw');
+                cell.textContent = `${located.digit}`;
+                if (located.isSharp) {
+                  const sp = document.createElement('span');
+                  sp.className = 'sharp';
+                  sp.textContent = '#';
+                  cell.appendChild(sp);
+                }
+              }
+              row.appendChild(cell);
+            }
+          }
+        }
+
+        block.appendChild(row);
+      }
+
+      container.appendChild(block);
+    }
+  }
+
+  // ============================================================
+  //  6. FILE LOADING
+  // ============================================================
+
+  function loadFile(file) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const text = e.target.result;
+      currentSentences = parseFile(text);
+      render();
+      document.getElementById('fileName').textContent = file.name;
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  // ============================================================
+  //  7. EVENT BINDING & INIT
+  // ============================================================
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const fileInput = document.getElementById('fileInput');
+    const modeRadios = document.querySelectorAll('input[name="gridMode"]');
+    const columnsInput = document.getElementById('columnsInput');
+
+    // File input
+    fileInput.addEventListener('change', function (e) {
+      if (e.target.files.length > 0) {
+        loadFile(e.target.files[0]);
+      }
+    });
+
+    // Mode toggle
+    modeRadios.forEach(radio => {
+      radio.addEventListener('change', function () {
+        currentLayout = this.value === '20' ? LAYOUT_20 : LAYOUT_12;
+        render();
+      });
+    });
+
+    // Columns
+    columnsInput.addEventListener('input', function () {
+      columns = parseInt(this.value, 10) || 1;
+      if (columns < 1) columns = 1;
+      if (columns > 10) columns = 10;
+      document.getElementById('grid-container').style.maxWidth =
+        columns > 1 ? `${columns * 320}px` : 'none';
+      render();
+    });
+
+    // Init
+    currentLayout = document.querySelector('input[name="gridMode"]:checked').value === '20' ? LAYOUT_20 : LAYOUT_12;
+    columns = parseInt(columnsInput.value, 10) || 1;
+    if (columns > 1) {
+      document.getElementById('grid-container').style.maxWidth = `${columns * 320}px`;
+    }
+    render();
+  });
+
+  // Expose for debugging
+  window.__harmonica = { LAYOUT_12, LAYOUT_20, parseNote, locateNote, parseFile, get currentSentences() { return currentSentences; } };
+})();
+</script>
+</body>
+</html>
