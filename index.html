@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>口琴练习系统</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -63,19 +64,17 @@
 
   /* ── Grid container ── */
   #grid-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--column-count, 1), max-content);
+    gap: 8px;
     align-items: flex-start;
   }
 
   /* ── Sentence block ── */
   .sentence {
-    flex: 0 0 auto;
     border: 2px solid #999;
     border-radius: 6px;
     overflow: hidden;
-    margin: 4px;
     background: #fff;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   }
@@ -117,21 +116,59 @@
   .col-header .cell {
     flex: 0 0 auto;
     width: 40px;
-    height: 24px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: 11px;
     color: #888;
     border-right: 1px solid #ddd;
     background: #fff;
     position: relative;
   }
   .col-header .cell:last-child { border-right: none; }
-  .col-header .cell .octave-mark {
+  .note-symbol {
+    display: inline-grid;
+    grid-template-rows: 8px 16px 8px;
+    align-items: center;
+    justify-items: center;
+    min-width: 18px;
+    line-height: 1;
+  }
+  .note-symbol .dots {
+    display: flex;
+    gap: 1px;
+    height: 8px;
+    align-items: center;
+    justify-content: center;
     font-size: 8px;
-    color: #aaa;
-    margin-left: 1px;
+    line-height: 1;
+  }
+  .note-symbol .core {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 16px;
+  }
+  .note-symbol .sharp-sign {
+    font-size: 0.72em;
+    line-height: 1;
+    margin-right: 1px;
+    transform: translateY(-2px);
+  }
+  .note-symbol .digit {
+    line-height: 1;
+  }
+  .col-header .note-symbol {
+    grid-template-rows: 7px 12px 7px;
+    min-width: 14px;
+  }
+  .col-header .note-symbol .dots {
+    height: 7px;
+    font-size: 7px;
+  }
+  .col-header .note-symbol .core {
+    height: 12px;
   }
 
   /* ── Note row ── */
@@ -157,6 +194,9 @@
     position: relative;
   }
   .note-row .cell:last-child { border-right: none; }
+  .note-row .cell .note-symbol {
+    font-size: 16px;
+  }
 
   /* ── Active cell states ── */
   .note-row .cell.blow {
@@ -206,7 +246,8 @@
     .controls { flex-direction: column; align-items: flex-start; }
     .note-row .cell, .col-header .cell { width: 32px; }
     .note-row .cell { height: 30px; font-size: 13px; }
-    .col-header .cell { height: 20px; font-size: 9px; }
+    .note-row .cell .note-symbol { font-size: 13px; }
+    .col-header .cell { height: 28px; font-size: 9px; }
   }
 </style>
 </head>
@@ -281,6 +322,7 @@
 
   // Pattern: optional #, then digit (1-7 or 0), then optional octave marks
   const NOTE_RE = /^(#)?([1-7]|0)(--|\+\+|[-+])?$/;
+  const NOTE_LABEL_RE = /^(#)?([1-7])([-+]+)?$/;
 
   function parseNote(token) {
     const m = token.match(NOTE_RE);
@@ -295,7 +337,20 @@
       if (ch === '-') octave--;
       if (ch === '+') octave++;
     }
-    return { sharp, digit, octave, isRest: false };
+    return { sharp, digit, octave, isRest: false, raw: token };
+  }
+
+  function parseNoteLabel(label) {
+    const m = label.match(NOTE_LABEL_RE);
+    if (!m) return { sharp: false, digit: label, octave: 0 };
+
+    const mark = m[3] || '';
+    let octave = 0;
+    for (const ch of mark) {
+      if (ch === '-') octave--;
+      if (ch === '+') octave++;
+    }
+    return { sharp: m[1] === '#', digit: parseInt(m[2], 10), octave };
   }
 
   // ============================================================
@@ -331,7 +386,7 @@
     // Blow notes: 1, 3, 5;  Draw notes: 2, 4, 6, 7
     const isBlow = digit === 1 || digit === 3 || digit === 5;
 
-    return { hole: holeIndex, isBlow, isSharp: sharp, digit, rest: false };
+    return { hole: holeIndex, isBlow, isSharp: sharp, digit, octave, rest: false };
   }
 
   // ============================================================
@@ -387,6 +442,55 @@
   let currentSentences = [];
   let columns = 1;
 
+  function clampColumns(value) {
+    const parsed = parseInt(value, 10) || 1;
+    return Math.min(Math.max(parsed, 1), 10);
+  }
+
+  function applyColumnLayout() {
+    document.getElementById('grid-container').style.setProperty('--column-count', columns);
+  }
+
+  function createDots(count, className) {
+    const dots = document.createElement('span');
+    dots.className = `dots ${className}`;
+    dots.setAttribute('aria-hidden', 'true');
+
+    for (let i = 0; i < count; i++) {
+      const dot = document.createElement('span');
+      dot.textContent = '•';
+      dots.appendChild(dot);
+    }
+
+    return dots;
+  }
+
+  function createNoteSymbol(note) {
+    const symbol = document.createElement('span');
+    symbol.className = 'note-symbol';
+    symbol.setAttribute('aria-label', `${note.sharp ? '升' : ''}${note.digit}${note.octave > 0 ? '+'.repeat(note.octave) : '-'.repeat(Math.abs(note.octave))}`);
+
+    const topDots = createDots(Math.max(note.octave, 0), 'top');
+    const core = document.createElement('span');
+    core.className = 'core';
+    const bottomDots = createDots(Math.max(-note.octave, 0), 'bottom');
+
+    if (note.sharp) {
+      const sharp = document.createElement('span');
+      sharp.className = 'sharp-sign';
+      sharp.textContent = '♯';
+      core.appendChild(sharp);
+    }
+
+    const digit = document.createElement('span');
+    digit.className = 'digit';
+    digit.textContent = `${note.digit}`;
+    core.appendChild(digit);
+
+    symbol.append(topDots, core, bottomDots);
+    return symbol;
+  }
+
   function render() {
     const container = document.getElementById('grid-container');
     const legend = document.getElementById('legend');
@@ -399,6 +503,7 @@
 
     legend.style.display = 'flex';
     container.innerHTML = '';
+    applyColumnLayout();
 
     const numCells = currentLayout.length;
 
@@ -410,13 +515,9 @@
       cell.className = 'cell';
       const h = currentLayout[i];
       // Show blow note as label
-      const blowLabel = h.blow;
-      cell.textContent = blowLabel;
+      cell.appendChild(createNoteSymbol(parseNoteLabel(h.blow)));
       headerRow.appendChild(cell);
     }
-
-    // Render each sentence as a block
-    const colCount = columns;
 
     for (let si = 0; si < currentSentences.length; si++) {
       const sent = currentSentences[si];
@@ -462,13 +563,11 @@
               cell.className = 'cell';
               if (i === located.hole) {
                 cell.classList.add(located.isBlow ? 'blow' : 'draw');
-                cell.textContent = `${located.digit}`;
-                if (located.isSharp) {
-                  const sp = document.createElement('span');
-                  sp.className = 'sharp';
-                  sp.textContent = '#';
-                  cell.appendChild(sp);
-                }
+                cell.appendChild(createNoteSymbol({
+                  sharp: located.isSharp,
+                  digit: located.digit,
+                  octave: located.octave,
+                }));
               }
               row.appendChild(cell);
             }
@@ -489,12 +588,15 @@
   function loadFile(file) {
     const reader = new FileReader();
     reader.onload = function (e) {
-      const text = e.target.result;
-      currentSentences = parseFile(text);
-      render();
-      document.getElementById('fileName').textContent = file.name;
+      loadText(e.target.result, file.name);
     };
     reader.readAsText(file, 'UTF-8');
+  }
+
+  function loadText(text, fileName = '调试文本') {
+    currentSentences = parseFile(text);
+    render();
+    document.getElementById('fileName').textContent = fileName;
   }
 
   // ============================================================
@@ -523,25 +625,21 @@
 
     // Columns
     columnsInput.addEventListener('input', function () {
-      columns = parseInt(this.value, 10) || 1;
-      if (columns < 1) columns = 1;
-      if (columns > 10) columns = 10;
-      document.getElementById('grid-container').style.maxWidth =
-        columns > 1 ? `${columns * 320}px` : 'none';
+      columns = clampColumns(this.value);
+      this.value = columns;
       render();
     });
 
     // Init
     currentLayout = document.querySelector('input[name="gridMode"]:checked').value === '20' ? LAYOUT_20 : LAYOUT_12;
-    columns = parseInt(columnsInput.value, 10) || 1;
-    if (columns > 1) {
-      document.getElementById('grid-container').style.maxWidth = `${columns * 320}px`;
-    }
+    columns = clampColumns(columnsInput.value);
+    columnsInput.value = columns;
+    applyColumnLayout();
     render();
   });
 
   // Expose for debugging
-  window.__harmonica = { LAYOUT_12, LAYOUT_20, parseNote, locateNote, parseFile, get currentSentences() { return currentSentences; } };
+  window.__harmonica = { LAYOUT_12, LAYOUT_20, parseNote, locateNote, parseFile, createNoteSymbol, loadText, get currentSentences() { return currentSentences; } };
 })();
 </script>
 </body>
