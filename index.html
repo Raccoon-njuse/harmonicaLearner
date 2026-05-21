@@ -159,18 +159,6 @@
   .note-symbol .digit {
     line-height: 1;
   }
-  .col-header .note-symbol {
-    grid-template-rows: 7px 12px 7px;
-    min-width: 14px;
-  }
-  .col-header .note-symbol .dots {
-    height: 7px;
-    font-size: 7px;
-  }
-  .col-header .note-symbol .core {
-    height: 12px;
-  }
-
   /* ── Note row ── */
   .note-row {
     display: flex;
@@ -322,7 +310,6 @@
 
   // Pattern: optional #, then digit (1-7 or 0), then optional octave marks
   const NOTE_RE = /^(#)?([1-7]|0)(--|\+\+|[-+])?$/;
-  const NOTE_LABEL_RE = /^(#)?([1-7])([-+]+)?$/;
 
   function parseNote(token) {
     const m = token.match(NOTE_RE);
@@ -338,19 +325,6 @@
       if (ch === '+') octave++;
     }
     return { sharp, digit, octave, isRest: false, raw: token };
-  }
-
-  function parseNoteLabel(label) {
-    const m = label.match(NOTE_LABEL_RE);
-    if (!m) return { sharp: false, digit: label, octave: 0 };
-
-    const mark = m[3] || '';
-    let octave = 0;
-    for (const ch of mark) {
-      if (ch === '-') octave--;
-      if (ch === '+') octave++;
-    }
-    return { sharp: m[1] === '#', digit: parseInt(m[2], 10), octave };
   }
 
   // ============================================================
@@ -513,9 +487,10 @@
     for (let i = 0; i < numCells; i++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
-      const h = currentLayout[i];
-      // Show blow note as label
-      cell.appendChild(createNoteSymbol(parseNoteLabel(h.blow)));
+      // 表头只给 12 格核心区编号；20 格模式左右扩展区留空。
+      const headerOffset = numCells === 20 ? 4 : 0;
+      const headerNumber = i - headerOffset + 1;
+      cell.textContent = headerNumber >= 1 && headerNumber <= 12 ? `${headerNumber}` : '';
       headerRow.appendChild(cell);
     }
 
