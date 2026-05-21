@@ -182,6 +182,10 @@
     position: relative;
   }
   .note-row .cell:last-child { border-right: none; }
+  .col-header .cell.major-divider,
+  .note-row .cell.major-divider {
+    box-shadow: inset 2px 0 0 #999;
+  }
   .note-row .cell .note-symbol {
     font-size: 16px;
   }
@@ -425,6 +429,18 @@
     document.getElementById('grid-container').style.setProperty('--column-count', columns);
   }
 
+  function getCoreHeaderNumber(index, numCells) {
+    const headerOffset = numCells === 20 ? 4 : 0;
+    return index - headerOffset + 1;
+  }
+
+  function applyCellDivider(cell, index, numCells) {
+    const headerNumber = getCoreHeaderNumber(index, numCells);
+    if (headerNumber === 5 || headerNumber === 9) {
+      cell.classList.add('major-divider');
+    }
+  }
+
   function createDots(count, className) {
     const dots = document.createElement('span');
     dots.className = `dots ${className}`;
@@ -488,9 +504,9 @@
       const cell = document.createElement('div');
       cell.className = 'cell';
       // 表头只给 12 格核心区编号；20 格模式左右扩展区留空。
-      const headerOffset = numCells === 20 ? 4 : 0;
-      const headerNumber = i - headerOffset + 1;
+      const headerNumber = getCoreHeaderNumber(i, numCells);
       cell.textContent = headerNumber >= 1 && headerNumber <= 12 ? `${headerNumber}` : '';
+      applyCellDivider(cell, i, numCells);
       headerRow.appendChild(cell);
     }
 
@@ -520,6 +536,7 @@
           for (let i = 0; i < numCells; i++) {
             const cell = document.createElement('div');
             cell.className = 'cell';
+            applyCellDivider(cell, i, numCells);
             if (i === 0) cell.textContent = '—';
             row.appendChild(cell);
           }
@@ -530,12 +547,14 @@
             for (let i = 0; i < numCells; i++) {
               const cell = document.createElement('div');
               cell.className = 'cell';
+              applyCellDivider(cell, i, numCells);
               row.appendChild(cell);
             }
           } else {
             for (let i = 0; i < numCells; i++) {
               const cell = document.createElement('div');
               cell.className = 'cell';
+              applyCellDivider(cell, i, numCells);
               if (i === located.hole) {
                 cell.classList.add(located.isBlow ? 'blow' : 'draw');
                 cell.appendChild(createNoteSymbol({
