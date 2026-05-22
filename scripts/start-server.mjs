@@ -18,8 +18,8 @@ const mimeTypes = {
 function getPort() {
   const portArgIndex = process.argv.findIndex((arg) => arg === '--port' || arg === '-p');
   const rawPort = portArgIndex >= 0 ? process.argv[portArgIndex + 1] : process.env.PORT;
-  const port = Number.parseInt(rawPort || '8080', 10);
-  return Number.isInteger(port) && port > 0 ? port : 8080;
+  const port = Number.parseInt(rawPort || '2001', 10);
+  return Number.isInteger(port) && port > 0 ? port : 2001;
 }
 
 function resolveRequestPath(urlPath) {
