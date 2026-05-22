@@ -259,6 +259,61 @@
   .sidebar-empty { font-size: 13px; color: #999; padding: 8px 10px; }
   .main-content { flex: 1; min-width: 0; }
 
+  /* ── Direct input button ── */
+  .btn-input {
+    padding: 6px 14px;
+    font-size: 14px;
+    border: 1px solid #1976d2;
+    border-radius: 6px;
+    background: #fff;
+    color: #1976d2;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .btn-input:hover { background: #1976d2; color: #fff; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px;
+    padding: 24px; width: 560px; max-width: 90vw;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #333; }
+  .modal-filename {
+    font-size: 14px; padding: 8px 12px;
+    border: 1px solid #ccc; border-radius: 6px;
+    outline: none; transition: border-color 0.15s;
+  }
+  .modal-filename:focus { border-color: #1976d2; }
+  .modal-textarea {
+    font-size: 14px; padding: 10px 12px;
+    border: 1px solid #ccc; border-radius: 6px;
+    resize: vertical; min-height: 200px;
+    font-family: inherit; line-height: 1.6;
+    outline: none; transition: border-color 0.15s;
+  }
+  .modal-textarea:focus { border-color: #1976d2; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+  .modal-actions .btn {
+    padding: 7px 20px; font-size: 14px;
+    border-radius: 6px; cursor: pointer; border: none;
+    transition: background 0.15s;
+  }
+  .modal-actions .btn-cancel { background: #eee; color: #555; }
+  .modal-actions .btn-cancel:hover { background: #ddd; }
+  .modal-actions .btn-save { background: #1976d2; color: #fff; }
+  .modal-actions .btn-save:hover { background: #1565c0; }
+
   /* ── Responsive ── */
   @media (max-width: 800px) {
     .main-layout { flex-direction: column; }
@@ -287,6 +342,7 @@
 <div class="controls">
   <div class="file-area">
     <input type="file" id="fileInput" accept=".txt">
+    <button class="btn-input" id="btnDirectInput">直接输入</button>
     <span class="file-name" id="fileName">未选择文件</span>
   </div>
   <div class="mode-group">
@@ -700,7 +756,36 @@
   }
 
   // ============================================================
-  //  8. EVENT BINDING & INIT
+  //  8. DIRECT INPUT MODAL
+  // ============================================================
+
+  function openModal() {
+    document.getElementById('modalOverlay').classList.add('show');
+    document.getElementById('modalFilename').focus();
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('show');
+    document.getElementById('modalFilename').value = '';
+    document.getElementById('modalTextarea').value = '';
+  }
+
+  function saveFromModal() {
+    const nameInput = document.getElementById('modalFilename');
+    const textarea = document.getElementById('modalTextarea');
+    const rawName = nameInput.value.trim();
+    const content = textarea.value;
+    if (!rawName) { alert('请输入文件名'); nameInput.focus(); return; }
+    if (!content.trim()) { alert('请输入曲谱内容'); textarea.focus(); return; }
+    const fileName = rawName.endsWith('.txt') ? rawName : rawName + '.txt';
+    loadText(content, fileName);
+    currentScoreName = fileName;
+    uploadToServer(fileName, content).then(() => refreshScoreList());
+    closeModal();
+  }
+
+  // ============================================================
+  //  9. EVENT BINDING & INIT
   // ============================================================
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -713,6 +798,19 @@
       if (e.target.files.length > 0) {
         loadFile(e.target.files[0]);
       }
+    });
+
+    // Direct input button
+    document.getElementById('btnDirectInput').addEventListener('click', openModal);
+
+    // Modal
+    document.getElementById('modalCancel').addEventListener('click', closeModal);
+    document.getElementById('modalSave').addEventListener('click', saveFromModal);
+    document.getElementById('modalOverlay').addEventListener('click', function (e) {
+      if (e.target === this) closeModal();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeModal();
     });
 
     // Mode toggle
@@ -743,5 +841,17 @@
   window.__harmonica = { LAYOUT_12, LAYOUT_20, parseNote, locateNote, parseFile, createNoteSymbol, loadText, loadScoreFromServer, refreshScoreList, get currentSentences() { return currentSentences; } };
 })();
 </script>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 class="modal-title">直接输入曲谱</h3>
+    <input class="modal-filename" id="modalFilename" placeholder="文件名（例如：我的祖国.txt）" autocomplete="off">
+    <textarea class="modal-textarea" id="modalTextarea" placeholder="在此输入简谱内容…"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" id="modalCancel">取消</button>
+      <button class="btn btn-save" id="modalSave">保存并渲染</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
