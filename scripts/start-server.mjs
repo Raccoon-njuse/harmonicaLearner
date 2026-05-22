@@ -50,6 +50,6 @@ const server = createServer((req, res) => {
 });
 
 const port = getPort();
-server.listen(port, '127.0.0.1', () => {
-  console.log(`口琴练习系统已启动：http://127.0.0.1:${port}`);
+server.listen(port, '0.0.0.0', () => {
+  console.log(`口琴练习系统已启动：http://0.0.0.0:${port}`);
 });
