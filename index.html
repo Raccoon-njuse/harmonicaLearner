@@ -249,13 +249,25 @@
   }
   .score-list { list-style: none; }
   .score-item {
+    display: flex; align-items: center; justify-content: space-between;
     padding: 8px 10px; font-size: 13px; color: #333;
     cursor: pointer; border-radius: 6px; margin-bottom: 2px;
     transition: background 0.15s;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .score-item:hover { background: #f0f0f0; }
   .score-item.active { background: #e3f2fd; color: #1565c0; font-weight: 600; }
+  .score-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .score-actions { display: flex; gap: 2px; margin-left: 6px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; }
+  .score-item:hover .score-actions { opacity: 1; }
+  .score-btn {
+    width: 24px; height: 24px; border: none; background: transparent;
+    cursor: pointer; border-radius: 4px; font-size: 14px; line-height: 24px;
+    text-align: center; padding: 0; color: #999;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+  .score-btn:hover { background: #e0e0e0; color: #333; }
+  .score-btn-del:hover { background: #ffebee; color: #c62828; }
   .sidebar-empty { font-size: 13px; color: #999; padding: 8px 10px; }
   .main-content { flex: 1; min-width: 0; }
 
@@ -715,13 +727,24 @@
     }
     list.innerHTML = files.map(f => {
       const active = f === currentScoreName ? ' active' : '';
-      return `<li class="score-item${active}" data-name="${escapeHtml(f)}">${escapeHtml(f)}</li>`;
+      return `<li class="score-item${active}" data-name="${escapeHtml(f)}">
+        <span class="score-name">${escapeHtml(f)}</span>
+        <span class="score-actions">
+          <button class="score-btn" title="编辑" data-action="edit">✎</button>
+          <button class="score-btn score-btn-del" title="删除" data-action="delete">✕</button>
+        </span>
+      </li>`;
     }).join('');
-    list.querySelectorAll('.score-item').forEach(item => {
-      item.addEventListener('click', function () {
-        loadScoreFromServer(this.dataset.name);
-      });
-    });
+    // Event delegation — single listener on the list
+    list.onclick = function (e) {
+      const item = e.target.closest('.score-item');
+      if (!item) return;
+      const name = item.dataset.name;
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (action === 'edit') { editScore(name); return; }
+      if (action === 'delete') { deleteScore(name); return; }
+      loadScoreFromServer(name);
+    };
   }
 
   function escapeHtml(str) {
@@ -756,10 +779,41 @@
   }
 
   // ============================================================
-  //  8. DIRECT INPUT MODAL
+  //  8. DELETE / EDIT / MODAL
   // ============================================================
 
+  let editingFileName = null;
+
+  async function deleteScore(fileName) {
+    if (!confirm(`确定删除「${fileName}」吗？`)) return;
+    try {
+      const res = await fetch(`/api/scores/${encodeURIComponent(fileName)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+      if (currentScoreName === fileName) {
+        currentScoreName = null;
+        currentSentences = [];
+        render();
+        document.getElementById('fileName').textContent = '未选择文件';
+      }
+      refreshScoreList();
+    } catch { alert('删除失败'); }
+  }
+
+  async function editScore(fileName) {
+    try {
+      const res = await fetch(`/api/scores/${encodeURIComponent(fileName)}`);
+      if (!res.ok) throw new Error('Not found');
+      const data = await res.json();
+      editingFileName = fileName;
+      document.getElementById('modalOverlay').classList.add('show');
+      document.getElementById('modalFilename').value = fileName;
+      document.getElementById('modalTextarea').value = data.content;
+      document.getElementById('modalTextarea').focus();
+    } catch { alert('加载曲谱失败'); }
+  }
+
   function openModal() {
+    editingFileName = null;
     document.getElementById('modalOverlay').classList.add('show');
     document.getElementById('modalFilename').focus();
   }
@@ -768,6 +822,7 @@
     document.getElementById('modalOverlay').classList.remove('show');
     document.getElementById('modalFilename').value = '';
     document.getElementById('modalTextarea').value = '';
+    editingFileName = null;
   }
 
   function saveFromModal() {
@@ -778,6 +833,12 @@
     if (!rawName) { alert('请输入文件名'); nameInput.focus(); return; }
     if (!content.trim()) { alert('请输入曲谱内容'); textarea.focus(); return; }
     const fileName = rawName.endsWith('.txt') ? rawName : rawName + '.txt';
+
+    // If renamed during edit, remove the old file
+    if (editingFileName && editingFileName !== fileName) {
+      fetch(`/api/scores/${encodeURIComponent(editingFileName)}`, { method: 'DELETE' }).catch(() => {});
+    }
+
     loadText(content, fileName);
     currentScoreName = fileName;
     uploadToServer(fileName, content).then(() => refreshScoreList());
@@ -838,7 +899,7 @@
   });
 
   // Expose for debugging
-  window.__harmonica = { LAYOUT_12, LAYOUT_20, parseNote, locateNote, parseFile, createNoteSymbol, loadText, loadScoreFromServer, refreshScoreList, get currentSentences() { return currentSentences; } };
+  window.__harmonica = { LAYOUT_12, LAYOUT_20, parseNote, locateNote, parseFile, createNoteSymbol, loadText, loadScoreFromServer, deleteScore, editScore, openModal, refreshScoreList, get currentSentences() { return currentSentences; } };
 })();
 </script>
 

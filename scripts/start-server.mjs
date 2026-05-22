@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync, readdirSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, statSync, readdirSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +62,19 @@ const server = createServer((req, res) => {
     if (!existsSync(fp)) { sendJson(res, 404, {}); return; }
     try {
       sendJson(res, 200, { name, content: readFileSync(fp, 'utf-8') });
+    } catch { sendJson(res, 500, {}); }
+    return;
+  }
+
+  // DELETE /api/scores/<name> — delete a saved score
+  if (req.method === 'DELETE' && reqPath.startsWith('/api/scores/')) {
+    const name = decodeURIComponent(reqPath.slice('/api/scores/'.length));
+    const fp = join(scoresDir, name);
+    if (!fp.startsWith(scoresDir + sep)) { sendJson(res, 403, {}); return; }
+    if (!existsSync(fp)) { sendJson(res, 404, {}); return; }
+    try {
+      unlinkSync(fp);
+      sendJson(res, 200, { ok: true });
     } catch { sendJson(res, 500, {}); }
     return;
   }
