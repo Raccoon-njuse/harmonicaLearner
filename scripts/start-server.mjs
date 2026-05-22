@@ -1,10 +1,12 @@
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, statSync, readdirSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const rootDir = resolve(__dirname, '..');
+const scoresDir = join(rootDir, 'scores');
+if (!existsSync(scoresDir)) mkdirSync(scoresDir, { recursive: true });
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -35,7 +37,52 @@ function resolveRequestPath(urlPath) {
   return filePath;
 }
 
+function sendJson(res, code, data) {
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(data));
+}
+
 const server = createServer((req, res) => {
+  const reqPath = (req.url || '/').split('?')[0];
+
+  // GET /api/scores — list saved .txt files
+  if (req.method === 'GET' && reqPath === '/api/scores') {
+    try {
+      const files = readdirSync(scoresDir).filter(f => f.endsWith('.txt')).sort();
+      sendJson(res, 200, files);
+    } catch { sendJson(res, 500, { error: 'Failed to list scores' }); }
+    return;
+  }
+
+  // GET /api/scores/<name> — get score content
+  if (req.method === 'GET' && reqPath.startsWith('/api/scores/')) {
+    const name = decodeURIComponent(reqPath.slice('/api/scores/'.length));
+    const fp = join(scoresDir, name);
+    if (!fp.startsWith(scoresDir + sep)) { sendJson(res, 403, {}); return; }
+    if (!existsSync(fp)) { sendJson(res, 404, {}); return; }
+    try {
+      sendJson(res, 200, { name, content: readFileSync(fp, 'utf-8') });
+    } catch { sendJson(res, 500, {}); }
+    return;
+  }
+
+  // POST /upload?name=… — save uploaded file
+  if (req.method === 'POST' && reqPath === '/upload') {
+    const url = new URL(req.url, 'http://localhost');
+    let name = url.searchParams.get('name') || 'untitled.txt';
+    name = name.replace(/[/\\]/g, '_');
+    if (!name.endsWith('.txt')) name += '.txt';
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      try {
+        writeFileSync(join(scoresDir, name), Buffer.concat(chunks).toString('utf-8'));
+        sendJson(res, 200, { ok: true, name });
+      } catch { sendJson(res, 500, {}); }
+    });
+    return;
+  }
+
   const filePath = resolveRequestPath(req.url || '/');
 
   if (!filePath || !existsSync(filePath) || !statSync(filePath).isFile()) {
